@@ -1,0 +1,107 @@
+#cloud-config
+
+write_files:
+  - path: /etc/garm/config.toml
+    content: |      
+      [default]
+      callback_url = "https://${url}/api/v1/callbacks"
+      metadata_url = "https://${url}/api/v1/metadata"
+
+      [metrics]
+      enable = true
+      disable_auth = false
+
+      [jwt_auth]
+      # Obviously, this needs to be changed :).
+      secret = "${jwt_secret}"
+      time_to_live = "8760h"
+
+      [apiserver]
+        bind = "0.0.0.0"
+        port = 80
+        use_tls = false
+
+      [database]
+        backend = "sqlite3"
+        # This needs to be changed.
+        passphrase = "${db_password}"
+        [database.sqlite3]
+          db_file = "/mnt/${volume_name}/garm/garm.db"
+      [[provider]]
+        name = "lxd_local"
+        provider_type = "external"
+        description = "Local LXD installation"
+        [provider.external]
+          provider_executable = "/opt/garm/providers.d/garm-provider-lxd"
+          config_file = "/etc/garm/garm-provider-lxd.toml"
+      [[github]]
+        name = "${github_user}"
+        description = "github token for user gabriel"
+        # This is a personal token with access to the repositories and organizations
+        # you plan on adding to garm. The "workflow" option needs to be selected in order
+        # to work with repositories, and the admin:org needs to be set if you plan on
+        # adding an organization.
+        oauth2_token = "${github_pat}"
+  - path: /etc/garm/garm-provider-lxd.toml
+    content: |
+      # the path to the unix socket that LXD is listening on. This works if garm and LXD
+      # are on the same system, and this option takes precedence over the "url" option,
+      # which connects over the network.
+      unix_socket_path = "/var/snap/lxd/common/lxd/unix.socket"
+      # When defining a pool for a repository or an organization, you have an option to
+      # specify a "flavor". In LXD terms, this translates to "profiles". Profiles allow
+      # you to customize your instances (memory, cpu, disks, nics, etc).
+      # This option allows you to inject the "default" profile along with the profile selected
+      # by the flavor.
+      include_default_profile = false
+      # instance_type defines the type of instances this provider will create.
+      #
+      # Options are:
+      #
+      #   * virtual-machine (default)
+      #   * container
+      #
+      instance_type = "container"
+      # enable/disable secure boot. If the image you select for the pool does not have a
+      # signed bootloader, set this to false, otherwise your instances won't boot.
+      secure_boot = false
+      # Project name to use. You can create a separate project in LXD for runners.
+      project_name = "default"
+      # URL is the address on which LXD listens for connections (ex: https://example.com:8443)
+      url = ""
+      # garm supports certificate authentication for LXD remote connections. The easiest way
+      # to get the needed certificates, is to install the lxc client and add a remote. The
+      # client_certificate, client_key and tls_server_certificate can be then fetched from
+      # $HOME/snap/lxd/common/config.
+      client_certificate = ""
+      client_key = ""
+      tls_server_certificate = ""
+      [image_remotes]
+        # Image remotes are important. These are the default remotes used by lxc. The names
+        # of these remotes are important. When specifying an "image" for the pool, that image
+        # can be a hash of an existing image on your local LXD installation or it can be a
+        # remote image from one of these remotes. You can specify the images as follows:
+        # Example:
+        #
+        #    * ubuntu:20.04
+        #    * ubuntu_daily:20.04
+        #    * images:centos/8/cloud
+        #
+        # Ubuntu images come pre-installed with cloud-init which we use to set up the runner
+        # automatically and customize the runner. For non Ubuntu images, you need to use the
+        # variant that has "/cloud" in the name. Those images come with cloud-init.
+        [image_remotes.ubuntu]
+        addr = "https://cloud-images.ubuntu.com/releases"
+        public = true
+        protocol = "simplestreams"
+        skip_verify = false
+        [image_remotes.ubuntu_daily]
+        addr = "https://cloud-images.ubuntu.com/daily"
+        public = true
+        protocol = "simplestreams"
+        skip_verify = false
+        [image_remotes.images]
+        addr = "https://images.linuxcontainers.org"
+        public = true
+        protocol = "simplestreams"
+        skip_verify = false
